@@ -1,0 +1,11 @@
+path: ./dataset
+
+train: images/train
+val: images/val
+
+nc: 3
+
+names:
+  0: bearing
+  1: housing
+  2: shaft
