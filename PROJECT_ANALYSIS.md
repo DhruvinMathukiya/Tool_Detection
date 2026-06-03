@@ -36,14 +36,17 @@ Uses the `ultralytics` YOLOv8 implementation.
 - **Output:** Saves results to `runs/segment/bearing_housing_shaft_seg`.
 
 ### 3. Inference (`inference.py`)
-A real-time detection script using OpenCV and the trained `best.pt` model.
+A high-performance real-time detection script optimized for smooth preview.
+- **Multi-threaded Architecture:** 
+  - **Main Thread:** Handles camera capture, UI rendering, and result overlay at high FPS.
+  - **Inference Thread:** Runs YOLOv8 detection in the background, updating results asynchronously.
 - **Input:** Webcam stream (`cv2.VideoCapture(0)`).
+- **Performance Features:**
+  - **Smooth Preview:** Decoupled inference ensures the video feed remains fluid (targeting 19-24+ FPS).
+  - **Real-time FPS Display:** Shows the actual rendering frame rate on-screen.
 - **Functionality:**
-  - Detects objects in each frame.
-  - Draws bounding boxes around detected objects.
-  - Calculates and displays the width and height of the bounding box in pixels.
-  - Logs dimensions to the console.
-- **Control:** Press 'q' to exit the live stream.
+  - Draws bounding boxes and displays object dimensions (width/height in pixels).
+- **Control:** Press 'q' to exit.
 
 ### 4. Weights (`best.pt`)
 The project includes a `best.pt` file, which is the result of a previous training session and can be used immediately for inference.

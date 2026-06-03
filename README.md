@@ -24,8 +24,10 @@ python train.py
 ```
 
 ## Features
-- **Real-time Detection:** Live webcam feed processing.
+- **Smooth Real-time Detection:** Multi-threaded architecture for fluid video preview (19-24+ FPS).
+- **Asynchronous Inference:** Detection runs in the background to prevent UI lag.
 - **Dimension Tracking:** Displays width and height of detected parts in pixels.
+- **FPS Counter:** Integrated on-screen frame rate monitoring.
 - **Pre-trained Weights:** Includes `best.pt` for immediate use.
 
 For a detailed breakdown of the architecture and configuration, see [PROJECT_ANALYSIS.md](./PROJECT_ANALYSIS.md).
