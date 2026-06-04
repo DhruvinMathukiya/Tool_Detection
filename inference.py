@@ -1,123 +1,257 @@
-import argparse
-import threading
-import time
-import cv2
 from ultralytics import YOLO
+import cv2
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from PIL import Image, ImageTk
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="YOLOv8 Real-time Inference")
-    parser.add_argument("--model", type=str, default="best.pt", help="Path to model weights")
-    parser.add_argument("--source", type=int, default=0, help="Camera index or video path")
-    parser.add_argument("--headless", action="store_true", help="Run without showing GUI window")
-    return parser.parse_args()
+# Load YOLO model
+model = YOLO("best.pt")
 
-# Shared variables
-frame_lock = threading.Lock()
-latest_frame = None
-latest_results = None
-new_frame_evt = threading.Event()
-running = True
+image_path = None
+output_image = None
 
-def inference_worker(model_path):
-    """Background thread for model inference."""
-    global latest_results, running
-    
-    # Load model inside thread to keep main thread responsive during init
-    print(f"[Info] Loading model: {model_path}...")
-    model = YOLO(model_path)
-    print("[Info] Model loaded.")
 
-    while running:
-        # Wait for a new frame to process
-        if new_frame_evt.wait(timeout=0.1):
-            new_frame_evt.clear()
-            
-            with frame_lock:
-                if latest_frame is None:
-                    continue
-                img = latest_frame.copy()
-            
-            # Run inference
-            results = model(img, verbose=False)
-            
-            with frame_lock:
-                latest_results = results
-        else:
-            # Idle sleep to prevent high CPU usage when no frames are coming
-            time.sleep(0.001)
+# ---------------- Upload Image ----------------
+def upload_image():
+    global image_path
 
-def main():
-    global latest_frame, latest_results, running
-    args = parse_args()
-    
-    cap = cv2.VideoCapture(args.source)
-    if not cap.isOpened():
-        print(f"[Error] Could not open video source {args.source}")
+    image_path = filedialog.askopenfilename(
+        title="Select Image",
+        filetypes=[
+            ("Image Files", "*.jpg *.jpeg *.png *.bmp")
+        ]
+    )
+
+    if not image_path:
         return
 
-    # Start inference worker
-    infer_thread = threading.Thread(
-        target=inference_worker, 
-        args=(args.model,), 
-        daemon=True
+    img = Image.open(image_path)
+
+    # Larger preview size
+    img = img.resize((600, 500))
+
+    photo = ImageTk.PhotoImage(img)
+
+    original_label.config(image=photo)
+    original_label.image = photo
+
+    status_label.config(text="Image Loaded Successfully")
+
+
+# ---------------- Run Detection ----------------
+def detect_objects():
+    global output_image
+
+    if image_path is None:
+        messagebox.showwarning(
+            "Warning",
+            "Please upload an image first."
+        )
+        return
+
+    image = cv2.imread(image_path)
+
+    results = model(image)
+
+    count = 0
+
+    for result in results:
+        for box in result.boxes:
+
+            count += 1
+
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+            confidence = float(box.conf[0])
+
+            width = x2 - x1
+            height = y2 - y1
+
+            # Draw box
+            cv2.rectangle(
+                image,
+                (x1, y1),
+                (x2, y2),
+                (0, 255, 0),
+                3
+            )
+
+            label = (
+                f"Conf:{confidence:.2f} "
+                f"W:{width}px "
+                f"H:{height}px"
+            )
+
+            cv2.putText(
+                image,
+                label,
+                (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 0),
+                2
+            )
+
+    output_image = image.copy()
+
+    image_rgb = cv2.cvtColor(
+        image,
+        cv2.COLOR_BGR2RGB
     )
-    infer_thread.start()
 
-    prev_time = time.time()
-    print("[Info] Starting inference. Press 'q' in GUI or Ctrl+C in CLI to stop.")
+    img = Image.fromarray(image_rgb)
 
-    try:
-        while running:
-            ret, frame = cap.read()
-            if not ret:
-                print("[Warning] Failed to grab frame.")
-                break
+    # Larger preview size
+    img = img.resize((600, 500))
 
-            # Update latest frame and signal worker
-            with frame_lock:
-                latest_frame = frame
-                current_results = latest_results
-            new_frame_evt.set()
+    photo = ImageTk.PhotoImage(img)
 
-            # Processing for display or logging
-            if current_results:
-                for result in current_results:
-                    for box in result.boxes:
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        width, height = x2 - x1, y2 - y1
-                        
-                        if not args.headless:
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                            label = f"W:{width}px H:{height}px"
-                            cv2.putText(frame, label, (x1, y1 - 10), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                        else:
-                            # In headless mode, we can log to console periodically
-                            pass 
+    result_label.config(image=photo)
+    result_label.image = photo
 
-            # Calculate FPS
-            curr_time = time.time()
-            fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
-            prev_time = curr_time
+    info_label.config(
+        text=f"Detected Objects: {count}"
+    )
 
-            if not args.headless:
-                cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                cv2.imshow("Detection", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
-            else:
-                # Print status to CLI periodically
-                if int(curr_time) % 5 == 0 and int(prev_time) % 5 != 0:
-                    print(f"[Status] Running... FPS: {fps:.2f}")
+    status_label.config(
+        text="Detection Completed"
+    )
 
-    except KeyboardInterrupt:
-        print("\n[Info] Interrupted by user.")
-    finally:
-        running = False
-        cap.release()
-        cv2.destroyAllWindows()
-        print("[Info] Cleanup complete.")
 
-if __name__ == "__main__":
-    main()
+# ---------------- Save Output ----------------
+def save_output():
+
+    if output_image is None:
+        messagebox.showwarning(
+            "Warning",
+            "No output image available."
+        )
+        return
+
+    save_path = filedialog.asksaveasfilename(
+        defaultextension=".jpg",
+        filetypes=[("JPEG", "*.jpg")]
+    )
+
+    if save_path:
+        cv2.imwrite(save_path, output_image)
+
+        messagebox.showinfo(
+            "Success",
+            "Output Image Saved Successfully"
+        )
+
+
+# ---------------- View Full Image ----------------
+def view_full_image():
+
+    if output_image is None:
+        messagebox.showwarning(
+            "Warning",
+            "Run detection first."
+        )
+        return
+
+    cv2.imshow(
+        "Full Resolution Detection Result",
+        output_image
+    )
+    cv2.waitKey(0)
+
+
+# ---------------- GUI ----------------
+root = tk.Tk()
+root.title("YOLO Object Detection System")
+
+# Bigger Window
+root.geometry("1400x900")
+
+# Title
+title = tk.Label(
+    root,
+    text="YOLO Object Detection",
+    font=("Arial", 24, "bold")
+)
+title.pack(pady=15)
+
+# Buttons
+button_frame = tk.Frame(root)
+button_frame.pack(pady=10)
+
+upload_btn = tk.Button(
+    button_frame,
+    text="Upload Image",
+    command=upload_image,
+    width=20,
+    height=2,
+    bg="lightblue"
+)
+upload_btn.grid(row=0, column=0, padx=10)
+
+detect_btn = tk.Button(
+    button_frame,
+    text="Run Detection",
+    command=detect_objects,
+    width=20,
+    height=2,
+    bg="lightgreen"
+)
+detect_btn.grid(row=0, column=1, padx=10)
+
+save_btn = tk.Button(
+    button_frame,
+    text="Save Output",
+    command=save_output,
+    width=20,
+    height=2,
+    bg="orange"
+)
+save_btn.grid(row=0, column=2, padx=10)
+
+
+
+# Image Area
+image_frame = tk.Frame(root)
+image_frame.pack(pady=20)
+
+original_label = tk.Label(
+    image_frame,
+    text="Original Image",
+    relief="solid",
+    bd=2
+)
+original_label.grid(
+    row=0,
+    column=0,
+    padx=20
+)
+
+result_label = tk.Label(
+    image_frame,
+    text="Detection Result",
+    relief="solid",
+    bd=2
+)
+result_label.grid(
+    row=0,
+    column=1,
+    padx=20
+)
+
+# Info
+info_label = tk.Label(
+    root,
+    text="Detected Objects: 0",
+    font=("Arial", 14)
+)
+info_label.pack(pady=10)
+
+status_label = tk.Label(
+    root,
+    text="Ready",
+    fg="blue",
+    font=("Arial", 12)
+)
+status_label.pack()
+
+root.mainloop()
