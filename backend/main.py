@@ -27,7 +27,7 @@ async def root():
     return {"message": "Tool Detection API is running"}
 
 @app.post("/detect")
-async def detect_image(file: UploadFile = File(...)):
+async def detect_image(file: UploadFile = File(...)):       
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
