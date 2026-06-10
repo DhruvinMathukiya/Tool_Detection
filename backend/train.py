@@ -18,13 +18,15 @@ def main():
     # Train
     results = model.train(
         data="data.yaml",         
-        epochs=30,               
+        epochs=60,               
         imgsz=640,                
-        batch=16,                    
+        batch=4,                    
         device=0,                  
-        workers=4,
+        workers=0,
         patience=30,
         pretrained=True,
+        cache=False,
+        amp=True,
 
         # augmentation
         degrees=20,
