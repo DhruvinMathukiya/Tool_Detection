@@ -3,3 +3,4 @@ runs
 dataset
 yolo26n.pt
 yolov8s.pt
+.venv
